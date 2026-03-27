@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Float, Integer, String
+from sqlalchemy import Boolean, Column, Float, Integer, String
 from sqlalchemy.dialects.postgresql import JSONB
 
 from app.models.database import Base
@@ -38,3 +38,6 @@ class Player(Base):
 
     # Behavior log for AI class assignment
     behavior_log = Column(JSONB, default=list)
+
+    # Admin flag
+    is_admin = Column(Boolean, default=False, nullable=False)

@@ -1,8 +1,8 @@
 from datetime import datetime, timedelta, timezone
 
+import bcrypt
 from fastapi import APIRouter, Depends, HTTPException
 from jose import jwt
-from passlib.context import CryptContext
 from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -12,7 +12,14 @@ from app.models.database import get_db
 from app.models.player import Player
 
 router = APIRouter()
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+
+
+def hash_password(password: str) -> str:
+    return bcrypt.hashpw(password.encode(), bcrypt.gensalt()).decode()
+
+
+def verify_password(password: str, hashed: str) -> bool:
+    return bcrypt.checkpw(password.encode(), hashed.encode())
 
 
 class RegisterRequest(BaseModel):
@@ -31,6 +38,7 @@ class TokenResponse(BaseModel):
     token_type: str = "bearer"
     player_id: int
     name: str
+    is_admin: bool = False
 
 
 def create_token(player_id: int) -> str:
@@ -50,7 +58,7 @@ async def register(req: RegisterRequest, db: AsyncSession = Depends(get_db)):
 
     player = Player(
         username=req.username,
-        password_hash=pwd_context.hash(req.password),
+        password_hash=hash_password(req.password),
         name=req.name,
     )
     db.add(player)
@@ -61,6 +69,7 @@ async def register(req: RegisterRequest, db: AsyncSession = Depends(get_db)):
         access_token=create_token(player.id),
         player_id=player.id,
         name=player.name,
+        is_admin=player.is_admin,
     )
 
 
@@ -69,11 +78,12 @@ async def login(req: LoginRequest, db: AsyncSession = Depends(get_db)):
     result = await db.execute(select(Player).where(Player.username == req.username))
     player = result.scalar_one_or_none()
 
-    if not player or not pwd_context.verify(req.password, player.password_hash):
+    if not player or not verify_password(req.password, player.password_hash):
         raise HTTPException(401, "Invalid credentials")
 
     return TokenResponse(
         access_token=create_token(player.id),
         player_id=player.id,
         name=player.name,
+        is_admin=player.is_admin,
     )
